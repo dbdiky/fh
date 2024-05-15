@@ -437,21 +437,57 @@ def sast_menu(namespace, current_context):
                 print("Failed to execute command.")
 
         elif choice == '7':
-                os_choice = input("OS: ")
-                sensor = input("Enter the Sensor No.: ")
-                job_id = input("Paste the Job ID: ")
-                filename = f"sast-job-{job_id}_{current_context}.log"
-                # Extract context name from current_context
-                context_name = current_context.split('/')[-1]  # Assuming context is in the format "namespace/context"
-                directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
-                os.makedirs(directory, exist_ok=True)
+            os_choice = input("OS: ")
+            sensor = input("Enter the Sensor No.: ")
+            job_id = input("Job ID: ")
+            cluster_name_match = re.search(r'/([^/]+)$', current_context)
+            if cluster_name_match:
+                cluster_name = cluster_name_match.group(1).replace("fh-", "")
+            else:
+                print("Error: Could not extract cluster name from context.")
+                continue
+            filename = f"sast-scan-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"
+            context_name = current_context.split('/')[-1]
+            directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
+            os.makedirs(directory, exist_ok=True)
+            file_path = os.path.join(directory, filename)
+            command = f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan.log"
+            result = execute_kubectl_command(command)
+            if result:
+                result = re.sub(r'arn:aws:eks:[^:]+:\d+:cluster/[^ ]+', '', result)
+                try:
+                    with open(file_path, 'w') as f:
+                        f.write(result)
+                    print(f"File '{filename}' created successfully at {file_path}")
+                except Exception as e:
+                    print("Error:", e)
+            else:
+                print("Failed to capture output from the command.")
+
+        elif choice == '8':
+            os_choice = input("OS: ")
+            sensor = input("Enter the Sensor No.: ")
+            job_id = input("Job ID: ")
+            cluster_name_match = re.search(r'/([^/]+)$', current_context)
+            if cluster_name_match:
+                cluster_name = cluster_name_match.group(1).replace("fh-", "")
+            else:
+                print("Error: Could not extract cluster name from context.")
+                continue
+            # Define four commands and corresponding filenames
+            commands_files = [
+                (f"kubectl exec -it -n {namespace} scancentral-sast-controller-0 -- cat /fortify/logs/scancentralCtrl.log", f"sast-ctrl-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"),
+                (f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan.log", f"sast-scan-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"),
+                (f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan_FortifySupport.log", f"sast-FortifySupport-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log")
+            ]
+            context_name = current_context.split('/')[-1]
+            directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
+            os.makedirs(directory, exist_ok=True)
+            for command, filename in commands_files:
                 file_path = os.path.join(directory, filename)
-                # Construct the command to execute
-                command = f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan.log"
-                # Execute the command and capture the output
                 result = execute_kubectl_command(command)
-                # Write the output to a new file
                 if result:
+                    result = re.sub(r'arn:aws:eks:[^:]+:\d+:cluster/[^ ]+', '', result)
                     try:
                         with open(file_path, 'w') as f:
                             f.write(result)
@@ -459,55 +495,27 @@ def sast_menu(namespace, current_context):
                     except Exception as e:
                         print("Error:", e)
                 else:
-                    print("Failed to capture output from the command.")
-
-        elif choice == '8':
-                os_choice = input("OS: ")
-                sensor = input("Enter the Sensor No.: ")
-                job_id = input("Paste the Job ID: ")
-                filename = f"sast-job-{job_id}_{current_context}.log"
-                # Extract context name from current_context
-                context_name = current_context.split('/')[-1]  # Assuming context is in the format "namespace/context"
-                directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
-                os.makedirs(directory, exist_ok=True)
-                file_path = os.path.join(directory, filename)
-                # Construct the commands to execute
-                command1 = f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan.log"
-                command2 = f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan_FortifySupport.log"
-                command3 = f"kubectl exec -it -n {namespace} scancentral-sast-controller-0 -- cat /fortify/logs/scancentralCtrl.log"
-                # Execute the commands and capture the output
-                result1 = execute_kubectl_command(command1)
-                result2 = execute_kubectl_command(command2)
-                result3 = execute_kubectl_command(command3)
-                # Write the output to a new file
-                if result1 and result2 and result3:
-                    try:
-                        with open(file_path, 'w') as f:
-                            f.write(result1 + '\n')
-                            f.write(result2 + '\n')
-                            f.write(result3)
-                        print(f"File '{filename}' created successfully at {file_path}")
-                    except Exception as e:
-                        print("Error:", e)
-                else:
-                    print("Failed to capture output from one of the commands.")
-
+                    print(f"Failed to capture output from the command: {command}")
+            
         elif choice == '9':
                 os_choice = input("OS: ")
                 sensor = input("Enter the Sensor No.: ")
-                job_id = input("Paste the Job ID: ")
-                filename = f"sast-fhsupport-{job_id}_{current_context}.log"
-                # Extract context name from current_context
-                context_name = current_context.split('/')[-1]  # Assuming context is in the format "namespace/context"
+                job_id = input("Job ID: ")
+                cluster_name_match = re.search(r'/([^/]+)$', current_context)
+                if cluster_name_match:
+                    cluster_name = cluster_name_match.group(1).replace("fh-", "")
+                else:
+                    print("Error: Could not extract cluster name from context.")
+                    continue
+                filename = f"sast-FortifySupport-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"
+                context_name = current_context.split('/')[-1]
                 directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
                 os.makedirs(directory, exist_ok=True)
                 file_path = os.path.join(directory, filename)
-                # Construct the command to execute
                 command = f"kubectl exec -it -n {namespace} scancentral-sast-worker-{os_choice}-{sensor} -- powershell -C cat jobs/{job_id}/scan_FortifySupport.log"
-                # Execute the command and capture the output
                 result = execute_kubectl_command(command)
-                # Write the output to a new file
                 if result:
+                    result = re.sub(r'arn:aws:eks:[^:]+:\d+:cluster/[^ ]+', '', result)
                     try:
                         with open(file_path, 'w') as f:
                             f.write(result)
@@ -521,28 +529,22 @@ def sast_menu(namespace, current_context):
             os_choice = input("OS: ")
             sensor = input("Enter the Sensor No.: ")
             job_id = input("Paste the Job ID: ")
-            
             # Extract context name from current_context
             context_name = current_context.split('/')[-1]  # Assuming context is in the format "namespace/context"
             directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name, job_id))
             os.makedirs(directory, exist_ok=True)
-            
             # Construct the directory path inside the container
             container_dir = f"/fortify/jobs/{job_id}"  # Update DIR if necessary
-            
             # Construct the command to execute
-            command = f"kubectl cp -n {namespace} scancentral-sast-worker-windows-{sensor}:{container_dir} {directory}"
-            
+            command = f"kubectl cp -n {namespace} scancentral-sast-worker-{os_choice}-{sensor}:/{container_dir}/ {directory}"
             # Execute the command and capture the output
             result = execute_kubectl_command(command)
-            
             # Check if the command executed successfully
             if result is not None:
                 print("Directory copied successfully.")
             else:
                 print("Failed to copy directory.")
 
-                      
         elif choice == '11':
             print("Exiting...")
             break
@@ -684,7 +686,6 @@ def dast_menu(namespace, current_context):
             else:
                 print("Error: Could not extract cluster name from context.")
                 continue
-            
             # Define four commands and corresponding filenames
             commands_files = [
                 (f"kubectl logs -n {namespace} scanner-{sensor}", f"dast-scanner-{sensor}-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"),
@@ -697,7 +698,6 @@ def dast_menu(namespace, current_context):
                 (f"kubectl logs -n {namespace} scancentral-dast-core-globalservice-0 -c globalservice", f"dast-global-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"),
                 (f"kubectl logs -n {namespace} scancentral-dast-core-utilityservice-0 -c utilityservice", f"dast-util-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"),
             ]
-            
             context_name = current_context.split('/')[-1]
             directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
             os.makedirs(directory, exist_ok=True)
@@ -728,10 +728,11 @@ def lim_menu(namespace, current_context):
     while True:
         print("\nLIM Options")
         print("1. Switch Kubernetes Context")
-        print("2. Run LIM scan")
-        print("3. View LIM scan results")
-        print("4. Exit")
-        print("5. Go back to Main Menu")
+        print("2. View LIM Log")
+        print("3. Watch LIM Log")
+        print("4. Download LIM Log")
+        print("5. Exit")
+        print("6. Go back to Main Menu")
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -743,14 +744,53 @@ def lim_menu(namespace, current_context):
                     namespace = determine_namespace(new_context)
                     print(f"Determined namespace: {namespace}")
                     current_context = new_context
+
         elif choice == '2':
-            execute_kubectl_command(f"kubectl ssc scan -n {namespace}")
+            command = f"kubectl exec -it -n {namespace} lim-0 -- powershell -C 'Get-Content -Path log.txt'"
+            print("Executing command:", command)
+            try:
+                # Start tailing the log file
+                subprocess.run(command, shell=True)
+            except Exception as e:
+                print("Failed to execute command:", e)
+
         elif choice == '3':
-            execute_kubectl_command(f"kubectl ssc results -n {namespace}")
+            command = f"kubectl exec -it -n {namespace} lim-0 -- powershell -C 'Get-Content -Path log.txt -Wait'"
+            print("Executing command:", command)
+            try:
+                # Start tailing the log file
+                subprocess.run(command, shell=True)
+            except Exception as e:
+                print("Failed to execute command:", e)        
+        
         elif choice == '4':
+            cluster_name_match = re.search(r'/([^/]+)$', current_context)
+            if cluster_name_match:
+                cluster_name = cluster_name_match.group(1).replace("fh-", "")
+            else:
+                print("Error: Could not extract cluster name from context.")
+                continue
+            filename = f"LIM-Log-{cluster_name}_{datetime.now().strftime('%m-%d_%H-%M')}.log"
+            context_name = current_context.split('/')[-1]
+            directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
+            os.makedirs(directory, exist_ok=True)
+            file_path = os.path.join(directory, filename)
+            command = f"kubectl exec -it -n main lim-0 -- powershell -C 'cat log.txt'"
+            result = execute_kubectl_command(command)
+            if result:
+                result = re.sub(r'arn:aws:eks:[^:]+:\d+:cluster/[^ ]+', '', result)
+                try:
+                    with open(file_path, 'w') as f:
+                        f.write(result)
+                    print(f"File '{filename}' created successfully at {file_path}")
+                except Exception as e:
+                    print("Error:", e)
+            else:
+                print("Failed to capture output from the command.")
+        elif choice == '5':
             print("Exiting...")
             break
-        elif choice == '5':
+        elif choice == '6':
             break
         else:
             print("Invalid choice. Please enter a valid option.")
