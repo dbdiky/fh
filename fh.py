@@ -147,6 +147,46 @@ def determine_namespace(context):
     else:
         return "main"
 
+def prompt_environment():
+    while True:
+        env = input("Is this the test or main environment? (test/main): ").strip().lower()
+        if env in ["test", "main"]:
+            return env
+        else:
+            print("Invalid input. Please enter 'test' or 'main'.")
+
+def get_pod_names(env, os_type):
+    try:
+        command = f"kubectl get pods -n {env} -o name"
+        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        pod_names = result.stdout.split()
+        return [pod for pod in pod_names if f"scancentral-sast-worker-{os_type}" in pod]
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while fetching pod names: {e}")
+        return []
+
+def update_fortify_rule_packs(env):
+    linux_pods = get_pod_names(env, "linux")
+    windows_pods = get_pod_names(env, "windows")
+
+    for pod in linux_pods:
+        command = f"kubectl exec -it -n {env} {pod} -- fortifyupdate"
+        try:
+            print(f"Updating Fortify rule packs on {pod}...")
+            subprocess.run(command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred: {e}")
+
+    for pod in windows_pods:
+        command = f"kubectl exec -it -n {env} {pod} -- powershell -c fortifyupdate"
+        try:
+            print(f"Updating Fortify rule packs on {pod}...")
+            subprocess.run(command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred: {e}")
+
+    print("Update completed successfully.")
+
 def main_menu(namespace, current_context):
     while True:
         print("\n\033[1;31mCurrent Context:\033[0m", current_context)
@@ -358,8 +398,9 @@ def sast_menu(namespace, current_context):
         print("8. Scan Job Package")
         print("9. Job FH Support Log")
         print("10. Job Directory")
-        print("11. Exit")
-        print("12. Go back to Main Menu")
+        print("11. Update Fortify rule packs on all sensors")
+        print("12. Exit")
+        print("13. Go back to Main Menu")
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -546,9 +587,13 @@ def sast_menu(namespace, current_context):
                 print("Failed to copy directory.")
 
         elif choice == '11':
+            env = prompt_environment()
+            update_fortify_rule_packs(env)
+
+        elif choice == '12':
             print("Exiting...")
             break
-        elif choice == '12':
+        elif choice == '13':
             break
         else:
             print("Invalid choice. Please enter a valid option.")
