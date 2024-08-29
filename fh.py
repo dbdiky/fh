@@ -609,7 +609,7 @@ def dast_menu(namespace, current_context):
         print("5. DAST Utility Services")
         print("6. All DAST Logs")
         print("7. WIDATA ScanData Download")
-        print("8. WIDATA User Data Download")
+        print("8. WIDATA Job Log Download")
         print("9. Exit")
         print("10. Go back to Main Menu")
         choice = input("Enter your choice: ")
@@ -782,7 +782,7 @@ def dast_menu(namespace, current_context):
                 # Construct kubectl cp command to copy the entire folder
                 pod_name = f"scanner-{sensor}"
                 remote_directory = "/etc/wi/.widata/user/ScanData/"
-                local_directory = os.path.join(directory, f"wiScandata_{pod_name}_{cluster_name}")
+                local_directory = os.path.join(directory, f"wiScandata_{pod_name}")
                 command = f"kubectl cp -n {namespace} {pod_name}:{remote_directory} {local_directory}"
                 
                 # Execute kubectl cp command
@@ -812,7 +812,7 @@ def dast_menu(namespace, current_context):
                     # Construct the paths
                     pod_name = f"scanner-{sensor}"
                     remote_directory = f".widata/user/Logs/{scanid}"
-                    local_directory = os.path.join(directory, f"wiLog_{pod_name}_{cluster_name}_{scanid}")
+                    local_directory = os.path.join(directory, f"wiLog_{pod_name}_{scanid}")
                     
                     # Ensure local directory exists
                     os.makedirs(local_directory, exist_ok=True)
