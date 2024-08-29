@@ -340,7 +340,7 @@ def ssc_menu(namespace, current_context):
                 print("Failed to capture output from the command.")
                 
         elif choice == '8':
-            command = f"kubectl delete po -n {namespace} ssc-webapp-0"
+            command = f"kubectl rollout -n {namespace} restart sts ssc-webapp"
             print("Executing command:", command)
             try:
                 # Start tailing the log file
@@ -608,8 +608,10 @@ def dast_menu(namespace, current_context):
         print("4. DAST Global Services Log")
         print("5. DAST Utility Services")
         print("6. All DAST Logs")
-        print("7. Exit")
-        print("8. Go back to Main Menu")
+        print("7. WIDATA ScanData Download")
+        print("8. WIDATA User Data Download")
+        print("9. Exit")
+        print("10. Go back to Main Menu")
         choice = input("Enter your choice: ")
 
         if choice == '1':
@@ -759,12 +761,75 @@ def dast_menu(namespace, current_context):
                     except Exception as e:
                         print("Error:", e)
                 else:
-                    print(f"Failed to capture output from the command: {command}") 
+                    print(f"Failed to capture output from the command: {command}")
 
         elif choice == '7':
+                sensor = input("Enter the Sensor No.: ")
+
+                # Extract cluster name from context
+                cluster_name_match = re.search(r'/([^/]+)$', current_context)
+                if cluster_name_match:
+                    cluster_name = cluster_name_match.group(1).replace("fh-", "")
+                else:
+                    print("Error: Could not extract cluster name from context.")
+                    continue
+                
+                # Define download directory
+                context_name = current_context.split('/')[-1]
+                directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
+                os.makedirs(directory, exist_ok=True)
+                
+                # Construct kubectl cp command to copy the entire folder
+                pod_name = f"scanner-{sensor}"
+                remote_directory = "/etc/wi/.widata/user/ScanData/"
+                local_directory = os.path.join(directory, f"wiScandata_{pod_name}_{cluster_name}")
+                command = f"kubectl cp -n {namespace} {pod_name}:{remote_directory} {local_directory}"
+                
+                # Execute kubectl cp command
+                result = execute_kubectl_command(command)
+                if result is None:
+                    print("Failed to copy directory from the pod.")
+                else:
+                    print(f"Directory '{remote_directory}' successfully copied to '{local_directory}'")
+
+        elif choice == '8':
+                    sensor = input("Enter the Sensor No.: ")
+                    scanid = input("Enter ScanID: ")  
+                    
+                    # Extract cluster name from context
+                    cluster_name_match = re.search(r'/([^/]+)$', current_context)
+                    if cluster_name_match:
+                        cluster_name = cluster_name_match.group(1).replace("fh-", "")
+                    else:
+                        print("Error: Could not extract cluster name from context.")
+                        continue
+                    
+                    # Define download directory
+                    context_name = current_context.split('/')[-1]
+                    directory = os.path.expanduser(os.path.join("~", "Downloads", "Logs", context_name))
+                    os.makedirs(directory, exist_ok=True)
+                    
+                    # Construct the paths
+                    pod_name = f"scanner-{sensor}"
+                    remote_directory = f".widata/user/Logs/{scanid}"
+                    local_directory = os.path.join(directory, f"wiLog_{pod_name}_{cluster_name}_{scanid}")
+                    
+                    # Ensure local directory exists
+                    os.makedirs(local_directory, exist_ok=True)
+                    
+                    # Copy the directory from the pod to the local machine
+                    copy_command = f"kubectl cp -n {namespace} {pod_name}:{remote_directory}/ {local_directory}/"
+                    print(f"Copying directory from pod to local: {copy_command}")
+                    result = execute_kubectl_command(copy_command)
+                    if result is None:
+                        print("Failed to copy directory from the pod.")
+                    else:
+                        print(f"Directory '{remote_directory}' successfully copied to '{local_directory}'")        
+
+        elif choice == '9':
             print("Exiting...")
             break
-        elif choice == '8':
+        elif choice == '10':
             break
         else:
             print("Invalid choice. Please enter a valid option.")
